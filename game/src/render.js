@@ -25,7 +25,7 @@ export const PANEL_Y = HEADER_HEIGHT + 20;
 /** Where the hint button sits, so input can hit-test it. */
 export const HINT_BUTTON = { x: 1000, y: 14, w: 140, h: 36 };
 
-function drawHeader(ctx, game) {
+function drawHeader(ctx, game, nowMs) {
   const level = LEVELS[game.levelIndex];
   const total = levelDifferences(game).length;
   const found = total - remainingCount(game);
@@ -45,10 +45,13 @@ function drawHeader(ctx, game) {
   ctx.font = '15px sans-serif';
   ctx.fillText(`Level ${game.levelIndex + 1}: ${level.name}`, 20, HEADER_HEIGHT - 12);
 
-  // Found counter, big and central.
+  // Found counter, big and central. It swells briefly each time a
+  // difference is found, so the player feels the find in the header too.
+  const freshMs = game.lastFound !== null ? nowMs - game.lastFound.at : Infinity;
+  const swell = freshMs < 600 ? 1 + 0.22 * (1 - freshMs / 600) : 1;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = freshMs < 600 ? '#a9f5c3' : '#ffffff';
+  ctx.font = `bold ${Math.round(24 * swell)}px sans-serif`;
   ctx.fillText(`Found ${found} of ${total}  ·  ${remainingCount(game)} remain`, 560, 26);
   ctx.fillStyle = '#cbb8e8';
   ctx.font = '14px sans-serif';
@@ -123,6 +126,21 @@ function drawHintMark(ctx, x, y, nowMs) {
   ctx.fillText('?', x, y - 2);
 }
 
+/** An expanding, fading glow ring around a difference just found. */
+function drawFoundCelebration(ctx, x, y, ageMs) {
+  const progress = Math.min(1, ageMs / 900);
+  const r = 28 + progress * 30;
+  ctx.strokeStyle = `rgba(94, 232, 138, ${(1 - progress) * 0.9})`;
+  ctx.lineWidth = 5 - progress * 3;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(94, 232, 138, ${(1 - progress) * 0.14})`;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /** A red cross where a wrong click landed. */
 function drawWrongMark(ctx, x, y) {
   ctx.strokeStyle = '#ff6b5e';
@@ -164,7 +182,7 @@ export function drawFrame(ctx, game, timeMs) {
   ctx.fillStyle = '#0e0a1c';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  drawHeader(ctx, game);
+  drawHeader(ctx, game, nowMs);
 
   // Panel tabs.
   ctx.font = 'bold 15px sans-serif';
@@ -196,6 +214,17 @@ export function drawFrame(ctx, game, timeMs) {
     if (!game.found.has(d.id)) continue;
     drawFoundMark(ctx, PANEL_LEFT_X + d.x, PANEL_Y + d.y, pulse);
     drawFoundMark(ctx, PANEL_RIGHT_X + d.x, PANEL_Y + d.y, pulse);
+  }
+
+  // The just-found celebration: one expanding ring around the newest
+  // find, on both panels, fading out over 900 ms.
+  if (game.lastFound !== null) {
+    const fresh = diffs.find((d) => d.id === game.lastFound.id);
+    const ageMs = nowMs - game.lastFound.at;
+    if (fresh !== undefined && ageMs >= 0 && ageMs < 900) {
+      drawFoundCelebration(ctx, PANEL_LEFT_X + fresh.x, PANEL_Y + fresh.y, ageMs);
+      drawFoundCelebration(ctx, PANEL_RIGHT_X + fresh.x, PANEL_Y + fresh.y, ageMs);
+    }
   }
 
   // The hint pulse, on both panels.

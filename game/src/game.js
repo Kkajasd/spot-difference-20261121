@@ -31,6 +31,7 @@ export function newGame() {
     timeLeftMs: LEVELS[0].seconds * 1000,
     status: 'playing',
     wrongFlash: null,
+    lastFound: null,
     levelBonus: 0,
     totalTimeLeftMs: 0,
   };
@@ -83,6 +84,7 @@ export function clickAt(game, x, y, nowMs) {
   if (game.found.has(diff.id)) return 'already';
   game.found.add(diff.id);
   game.score += POINTS_PER_FIND;
+  game.lastFound = { id: diff.id, at: nowMs };
   game.hintShown = null;
   if (levelComplete(game)) {
     const bonus = Math.ceil(game.timeLeftMs / 1000) * POINTS_PER_SECOND_LEFT;
@@ -114,6 +116,7 @@ export function nextLevel(game) {
   game.found = new Set();
   game.hintsLeft = HINTS_PER_LEVEL;
   game.hintShown = null;
+  game.lastFound = null;
   game.timeLeftMs = LEVELS[game.levelIndex].seconds * 1000;
   game.levelBonus = 0;
   game.status = 'playing';
@@ -124,6 +127,7 @@ export function restartLevel(game) {
   game.found = new Set();
   game.hintsLeft = HINTS_PER_LEVEL;
   game.hintShown = null;
+  game.lastFound = null;
   game.timeLeftMs = LEVELS[game.levelIndex].seconds * 1000;
   game.levelBonus = 0;
   game.status = 'playing';
@@ -136,6 +140,8 @@ export function tick(game, dtMs, nowMs) {
   if (game.timeLeftMs <= 0) game.status = 'time-up';
   if (game.hintShown !== null && nowMs >= game.hintUntil) game.hintShown = null;
   if (game.wrongFlash !== null && nowMs >= game.wrongFlash.until) game.wrongFlash = null;
+  // The just-found celebration fades out on its own after 900 ms.
+  if (game.lastFound !== null && nowMs - game.lastFound.at > 900) game.lastFound = null;
 }
 
 /** Whole seconds left on the clock, for the header. */
